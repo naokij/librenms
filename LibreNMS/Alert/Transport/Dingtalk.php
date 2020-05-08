@@ -42,15 +42,14 @@ class Dingtalk extends Transport
     public function contactDingtalk($obj, $opts)
     {   
         $sign_params = [];
-        if ($opts["dingtalk-secret-key"]!=""){
-            $ts = now();
+        if ($opts["dingtalk-secret-key"]!="") {
+            $ts = time();
             $hash = hash_hmac('sha256', sprintf("%d\n%s",$ts,$opts["dingtalk-secret-key"]),$opts["dingtalk-secret-key"]);
             $sign_params = [
                 "timestamp" => $ts,
                 "sign" => base64_encode($hash),
             ];
         }
-        $sign_params = ["timestamp"-> now(),"sign"=>""];
         // Don't create tickets for resolutions
         if ($obj['state'] != 0) {
             $device = device_by_id_cache($obj['device_id']); // for event logging
@@ -59,7 +58,7 @@ class Dingtalk extends Transport
             $keyword = $opts['keyword'];
             $secret_key = $opts['secret-key'];
             $details     = "Librenms alert for: " . $obj['hostname'];
-            if ($keyword != ""){
+            if ($keyword != "") {
                 $details = $keyword." > ".$details;
             }
             $description = $obj['msg'];

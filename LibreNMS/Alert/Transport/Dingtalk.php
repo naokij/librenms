@@ -32,7 +32,7 @@ class Dingtalk extends Transport
     public function deliverAlert($obj, $opts)
     {
         if (!empty($this->config)) {
-            $opts['access-token'] = $this->config['dingtalk-token'];
+            $opts['access-token'] = str_replace('https://oapi.dingtalk.com/robot/send?access_token=','',$this->config['dingtalk-token']);
             $opts['keyword'] = $this->config['dingtalk-keyword'];
             $opts['secret-key'] = $this->config['dingtalk-secret-key'];
         }
@@ -42,12 +42,13 @@ class Dingtalk extends Transport
     public function contactDingtalk($obj, $opts)
     {   
         $sign_params = [];
-        if ($opts["dingtalk-secret-key"]!="") {
-            $ts = time();
-            $hash = hash_hmac('sha256', sprintf("%d\n%s",$ts,$opts["dingtalk-secret-key"]),$opts["dingtalk-secret-key"]);
+        if ($opts["secret-key"]!="") {
+            list($s1, $s2) = explode(' ', microtime());
+            $ts = (float)sprintf('%.0f', (floatval($s1) + floatval($s2)) * 1000);
+            $hash = hash_hmac('sha256', sprintf("%d\n%s",$ts,$opts["secret-key"]),$opts["secret-key"], true);
             $sign_params = [
                 "timestamp" => $ts,
-                "sign" => base64_encode($hash),
+                "sign" => urlencode(base64_encode($hash)),
             ];
         }
         // Don't create tickets for resolutions
@@ -63,7 +64,7 @@ class Dingtalk extends Transport
             }
             $description = $obj['msg'];
             
-            $url         = sprintf("%s?access_token=%s",self::DINGTALK_API_ENDPOINT,url_encode($access_token));
+            $url         = sprintf("%s?access_token=%s",self::DINGTALK_API_ENDPOINT,urlencode($access_token));
             if ($sign_params != []){
                 $url = sprintf("%s&timestamp=%d&sign=%s",$url,$sign_params["timestamp"], $sign_params["sign"]);
             }
@@ -77,7 +78,11 @@ class Dingtalk extends Transport
             ];
             $datastring = json_encode($postdata);
 
-            set_curl_proxy($curl);
+            if (!empty(get_proxy())) {
+                set_curl_proxy($curl);
+                curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+            }
+            
 
             $headers = array('Accept: application/json', 'Content-Type: application/json');
 
@@ -92,7 +97,13 @@ class Dingtalk extends Transport
             $code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
             if ($code == 200) {
                 $dingtalkout = json_decode($ret, true);
-                d_echo("Created dingtalk issue " . $dingtalkout['key'] . " for " . $device);
+                if ($dingtalkout['errcode']==0) {
+                    d_echo("Created dingtalk issue for " . $device);
+                    return true;
+                } else {
+                    d_echo("dingtalk api error: " . $dingtalkout['errorcode']);
+                    return false;
+                }
                 return true;
             } else {
                 d_echo("dingtalk connection error: " . serialize($ret));
